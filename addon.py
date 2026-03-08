@@ -490,11 +490,24 @@ class BlenderMCPServer:
 
                     # Select only mesh objects so framing ignores cameras/lights
                     bpy.ops.object.select_all(action='DESELECT')
-                    for obj in bpy.context.scene.objects:
-                        if obj.type == 'MESH':
-                            obj.select_set(True)
-                    with bpy.context.temp_override(area=area, region=region):
-                        bpy.ops.view3d.view_selected()
+                    mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+                    for obj in mesh_objects:
+                        obj.select_set(True)
+
+                    # Calculate bounding box of all mesh objects for manual framing
+                    if mesh_objects:
+                        all_coords = []
+                        for obj in mesh_objects:
+                            for corner in obj.bound_box:
+                                all_coords.append(obj.matrix_world @ mathutils.Vector(corner))
+                        center = sum(all_coords, mathutils.Vector()) / len(all_coords)
+                        max_dist = max((c - center).length for c in all_coords)
+
+                        r3d.view_location = center
+                        r3d.view_distance = max_dist * 2.5
+                    else:
+                        with bpy.context.temp_override(area=area, region=region):
+                            bpy.ops.view3d.view_selected()
 
                     # Force viewport redraw
                     area.tag_redraw()
