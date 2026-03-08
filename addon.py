@@ -472,11 +472,13 @@ class BlenderMCPServer:
             orig_distance = r3d.view_distance
             orig_location = r3d.view_location.copy()
             orig_shading = space.shading.type
+            orig_overlays = space.overlay.show_overlays
 
-            # Apply requested shading mode
+            # Apply requested shading mode and hide overlays for clean screenshots
             valid_shadings = {"SOLID", "MATERIAL", "WIREFRAME", "RENDERED"}
             if shading.upper() in valid_shadings:
                 space.shading.type = shading.upper()
+            space.overlay.show_overlays = False
 
             results = []
             try:
@@ -508,6 +510,9 @@ class BlenderMCPServer:
                     else:
                         with bpy.context.temp_override(area=area, region=region):
                             bpy.ops.view3d.view_selected()
+
+                    # Deselect all so orange outlines and origin dots don't clutter the screenshot
+                    bpy.ops.object.select_all(action='DESELECT')
 
                     # Force viewport redraw
                     area.tag_redraw()
@@ -542,6 +547,7 @@ class BlenderMCPServer:
                 r3d.view_distance = orig_distance
                 r3d.view_location = orig_location
                 space.shading.type = orig_shading
+                space.overlay.show_overlays = orig_overlays
 
             return {"success": True, "screenshots": results}
 
