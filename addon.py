@@ -207,6 +207,7 @@ class BlenderMCPServer:
             "get_scene_info": self.get_scene_info,
             "get_object_info": self.get_object_info,
             "get_viewport_screenshot": self.get_viewport_screenshot,
+            "get_multi_angle_screenshots": self.get_multi_angle_screenshots,
             "execute_code": self.execute_code,
             "export_model": self.export_model,
             "get_telemetry_consent": self.get_telemetry_consent,
@@ -415,6 +416,109 @@ class BlenderMCPServer:
                 "height": height,
                 "filepath": filepath
             }
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_multi_angle_screenshots(self, angles=None, max_size=800, filepath_prefix=None):
+        """
+        Capture screenshots from multiple predefined angles.
+        Rotates the viewport, captures, then restores the original view.
+        """
+        try:
+            if not filepath_prefix:
+                return {"error": "No filepath_prefix provided"}
+
+            # Predefined angle quaternions (w, x, y, z)
+            angle_quats = {
+                "front":       mathutils.Quaternion((0.7071, 0.7071, 0.0, 0.0)),
+                "back":        mathutils.Quaternion((0.0, 0.0, -0.7071, -0.7071)),
+                "right":       mathutils.Quaternion((0.5, 0.5, 0.5, 0.5)),
+                "left":        mathutils.Quaternion((0.5, 0.5, -0.5, -0.5)),
+                "top":         mathutils.Quaternion((1.0, 0.0, 0.0, 0.0)),
+                "bottom":      mathutils.Quaternion((0.0, 1.0, 0.0, 0.0)),
+                "perspective":  mathutils.Quaternion((0.8154, 0.4619, 0.1768, 0.3090)),
+            }
+
+            if angles is None:
+                angles = ["front", "right", "top", "perspective"]
+
+            invalid = [a for a in angles if a not in angle_quats]
+            if invalid:
+                return {"error": f"Unknown angles: {invalid}. Valid: {list(angle_quats.keys())}"}
+
+            # Find the 3D viewport
+            area = None
+            for a in bpy.context.screen.areas:
+                if a.type == 'VIEW_3D':
+                    area = a
+                    break
+            if not area:
+                return {"error": "No 3D viewport found"}
+
+            region = None
+            for r in area.regions:
+                if r.type == 'WINDOW':
+                    region = r
+                    break
+
+            space = area.spaces.active
+            r3d = space.region_3d
+
+            # Save original view state
+            orig_rotation = r3d.view_rotation.copy()
+            orig_perspective = r3d.view_perspective
+            orig_distance = r3d.view_distance
+            orig_location = r3d.view_location.copy()
+
+            results = []
+            try:
+                for angle_name in angles:
+                    # Set the view angle
+                    r3d.view_rotation = angle_quats[angle_name]
+                    if angle_name == "perspective":
+                        r3d.view_perspective = 'PERSP'
+                    else:
+                        r3d.view_perspective = 'ORTHO'
+
+                    # Frame all objects in view
+                    with bpy.context.temp_override(area=area, region=region):
+                        bpy.ops.view3d.view_all()
+
+                    # Force viewport redraw
+                    area.tag_redraw()
+                    bpy.context.view_layer.update()
+
+                    # Capture screenshot
+                    filepath = f"{filepath_prefix}_{angle_name}.png"
+                    with bpy.context.temp_override(area=area):
+                        bpy.ops.screen.screenshot_area(filepath=filepath)
+
+                    # Resize if needed
+                    img = bpy.data.images.load(filepath)
+                    width, height = img.size
+                    if max(width, height) > max_size:
+                        scale = max_size / max(width, height)
+                        img.scale(int(width * scale), int(height * scale))
+                        img.file_format = 'PNG'
+                        img.save()
+                        width, height = int(width * scale), int(height * scale)
+                    bpy.data.images.remove(img)
+
+                    results.append({
+                        "angle": angle_name,
+                        "filepath": filepath,
+                        "width": width,
+                        "height": height,
+                    })
+            finally:
+                # Always restore original view
+                r3d.view_rotation = orig_rotation
+                r3d.view_perspective = orig_perspective
+                r3d.view_distance = orig_distance
+                r3d.view_location = orig_location
+
+            return {"success": True, "screenshots": results}
 
         except Exception as e:
             return {"error": str(e)}

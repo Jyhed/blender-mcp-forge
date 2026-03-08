@@ -318,6 +318,72 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
 
 
 @mcp.tool()
+def get_multi_angle_screenshots(
+    ctx: Context,
+    angles: List[str] = None,
+    max_size: int = 800,
+) -> list:
+    """
+    Capture screenshots of the Blender viewport from multiple angles in a single call.
+    Returns separate images for each angle — much better than a single screenshot
+    for evaluating 3D work (proportions, materials, completeness).
+
+    Parameters:
+    - angles: List of angle names to capture. Defaults to ["front", "right", "top", "perspective"].
+      Available angles: "front", "back", "right", "left", "top", "bottom", "perspective".
+    - max_size: Maximum size in pixels for the largest dimension of each image (default: 800).
+
+    Returns a list of labeled images, one per angle.
+    """
+    if angles is None:
+        angles = ["front", "right", "top", "perspective"]
+
+    valid_angles = {"front", "back", "right", "left", "top", "bottom", "perspective"}
+    invalid = [a for a in angles if a not in valid_angles]
+    if invalid:
+        raise Exception(f"Unknown angles: {invalid}. Valid: {sorted(valid_angles)}")
+
+    temp_prefix = None
+    temp_files = []
+    try:
+        blender = get_blender_connection()
+
+        temp_dir = tempfile.gettempdir()
+        temp_prefix = os.path.join(temp_dir, f"blender_multi_{os.getpid()}_{id(ctx)}")
+
+        result = blender.send_command("get_multi_angle_screenshots", {
+            "angles": angles,
+            "max_size": max_size,
+            "filepath_prefix": temp_prefix,
+        })
+
+        if "error" in result:
+            raise Exception(result["error"])
+
+        screenshots = result.get("screenshots", [])
+        content = []
+        for shot in screenshots:
+            filepath = shot["filepath"]
+            temp_files.append(filepath)
+            if not os.path.exists(filepath):
+                continue
+            with open(filepath, 'rb') as f:
+                image_bytes = f.read()
+            content.append(f"[{shot['angle']}] {shot['width']}x{shot['height']}:")
+            content.append(Image(data=image_bytes, format="png"))
+
+        return content
+
+    except Exception as e:
+        logger.error(f"Error capturing multi-angle screenshots: {str(e)}")
+        raise Exception(f"Multi-angle screenshot failed: {str(e)}")
+    finally:
+        for f in temp_files:
+            if os.path.exists(f):
+                os.remove(f)
+
+
+@mcp.tool()
 def execute_blender_code(ctx: Context, code: str) -> str:
     """
     Execute arbitrary Python code in Blender. Make sure to do it step-by-step by breaking it into smaller chunks.
