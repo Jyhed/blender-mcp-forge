@@ -420,10 +420,11 @@ class BlenderMCPServer:
         except Exception as e:
             return {"error": str(e)}
 
-    def get_multi_angle_screenshots(self, angles=None, max_size=800, filepath_prefix=None):
+    def get_multi_angle_screenshots(self, angles=None, max_size=800, filepath_prefix=None, shading="SOLID"):
         """
         Capture screenshots from multiple predefined angles.
         Rotates the viewport, captures, then restores the original view.
+        Supports shading modes: SOLID, MATERIAL, WIREFRAME, RENDERED.
         """
         try:
             if not filepath_prefix:
@@ -470,6 +471,12 @@ class BlenderMCPServer:
             orig_perspective = r3d.view_perspective
             orig_distance = r3d.view_distance
             orig_location = r3d.view_location.copy()
+            orig_shading = space.shading.type
+
+            # Apply requested shading mode
+            valid_shadings = {"SOLID", "MATERIAL", "WIREFRAME", "RENDERED"}
+            if shading.upper() in valid_shadings:
+                space.shading.type = shading.upper()
 
             results = []
             try:
@@ -481,9 +488,13 @@ class BlenderMCPServer:
                     else:
                         r3d.view_perspective = 'ORTHO'
 
-                    # Frame all objects in view
+                    # Select only mesh objects so framing ignores cameras/lights
+                    bpy.ops.object.select_all(action='DESELECT')
+                    for obj in bpy.context.scene.objects:
+                        if obj.type == 'MESH':
+                            obj.select_set(True)
                     with bpy.context.temp_override(area=area, region=region):
-                        bpy.ops.view3d.view_all()
+                        bpy.ops.view3d.view_selected()
 
                     # Force viewport redraw
                     area.tag_redraw()
@@ -512,11 +523,12 @@ class BlenderMCPServer:
                         "height": height,
                     })
             finally:
-                # Always restore original view
+                # Always restore original view and shading
                 r3d.view_rotation = orig_rotation
                 r3d.view_perspective = orig_perspective
                 r3d.view_distance = orig_distance
                 r3d.view_location = orig_location
+                space.shading.type = orig_shading
 
             return {"success": True, "screenshots": results}
 

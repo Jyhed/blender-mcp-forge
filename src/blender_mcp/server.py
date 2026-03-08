@@ -333,16 +333,18 @@ def get_multi_angle_screenshots(
     ctx: Context,
     angles: List[str] = None,
     max_size: int = 800,
+    shading: str = "SOLID",
 ) -> list:
     """
     Capture screenshots of the Blender viewport from multiple angles in a single call.
-    Returns separate images for each angle — much better than a single screenshot
-    for evaluating 3D work (proportions, materials, completeness).
+    Frames mesh objects only (ignores cameras/lights). Returns separate images per angle.
 
     Parameters:
-    - angles: List of angle names to capture. Defaults to ["front", "right", "top", "perspective"].
-      Available angles: "front", "back", "right", "left", "top", "bottom", "perspective".
-    - max_size: Maximum size in pixels for the largest dimension of each image (default: 800).
+    - angles: List of angle names. Defaults to ["front", "right", "top", "perspective"].
+      Available: "front", "back", "right", "left", "top", "bottom", "perspective".
+    - max_size: Max dimension in pixels per image (default: 800).
+    - shading: Viewport shading mode. One of "SOLID" (default), "WIREFRAME", "MATERIAL", "RENDERED".
+      Use "WIREFRAME" to inspect mesh topology, "MATERIAL" to see textures.
 
     Returns a list of labeled images, one per angle.
     """
@@ -366,6 +368,7 @@ def get_multi_angle_screenshots(
             "angles": angles,
             "max_size": max_size,
             "filepath_prefix": temp_prefix,
+            "shading": shading.upper(),
         })
 
         if "error" in result:
