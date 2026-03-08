@@ -504,7 +504,7 @@ class BlenderMCPServer:
                         max_dist = max((c - center).length for c in all_coords)
 
                         r3d.view_location = center
-                        r3d.view_distance = max_dist * 2.5
+                        r3d.view_distance = max_dist * 3.0
                     else:
                         with bpy.context.temp_override(area=area, region=region):
                             bpy.ops.view3d.view_selected()
