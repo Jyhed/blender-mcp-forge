@@ -335,6 +335,50 @@ def execute_blender_code(ctx: Context, code: str) -> str:
         return f"Error executing code: {str(e)}"
 
 @mcp.tool()
+def export_model(
+    ctx: Context,
+    output_path: str,
+    export_format: str = "gltf",
+    selected_only: bool = False,
+) -> str:
+    """
+    Export objects from the current Blender scene to a file.
+
+    Use this after creating or modifying 3D assets to save them to disk.
+    Supports GLTF/GLB (best for Three.js/web), FBX (Unreal/Unity), and OBJ (universal).
+
+    Parameters:
+    - output_path: Absolute file path to save to (e.g. "C:/projects/game/assets/car.glb").
+      The directory must already exist. File extension is added automatically if missing.
+    - export_format: One of "gltf", "glb", "fbx", or "obj" (default: "gltf").
+      Use "glb" for a single binary file (best for most game engines).
+    - selected_only: If true, only export selected objects. If false, export all visible objects (default: false).
+
+    Returns a success message with the final file path, or an error.
+    """
+    valid_formats = {"gltf", "glb", "fbx", "obj"}
+    fmt = export_format.lower().strip()
+    if fmt not in valid_formats:
+        return f"Error: unsupported format '{export_format}'. Use one of: {', '.join(valid_formats)}"
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("export_model", {
+            "output_path": output_path,
+            "export_format": fmt,
+            "selected_only": selected_only,
+        })
+
+        if "error" in result:
+            return f"Error: {result['error']}"
+
+        return f"Exported successfully to: {result.get('filepath', output_path)}"
+    except Exception as e:
+        logger.error(f"Error exporting model: {str(e)}")
+        return f"Error exporting model: {str(e)}"
+
+
+@mcp.tool()
 def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
     """
     Get a list of categories for a specific asset type on Polyhaven.

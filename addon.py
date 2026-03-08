@@ -208,6 +208,7 @@ class BlenderMCPServer:
             "get_object_info": self.get_object_info,
             "get_viewport_screenshot": self.get_viewport_screenshot,
             "execute_code": self.execute_code,
+            "export_model": self.export_model,
             "get_telemetry_consent": self.get_telemetry_consent,
             "get_polyhaven_status": self.get_polyhaven_status,
             "get_hyper3d_status": self.get_hyper3d_status,
@@ -436,6 +437,54 @@ class BlenderMCPServer:
             raise Exception(f"Code execution error: {str(e)}")
 
 
+
+    def export_model(self, output_path, export_format="gltf", selected_only=False):
+        """Export scene or selected objects to a file"""
+        try:
+            fmt = export_format.lower()
+            path = output_path
+
+            # Map format to file extension and ensure correct extension
+            ext_map = {"gltf": ".gltf", "glb": ".glb", "fbx": ".fbx", "obj": ".obj"}
+            expected_ext = ext_map.get(fmt)
+            if expected_ext is None:
+                return {"error": f"Unsupported format: {export_format}"}
+
+            # Add extension if missing
+            if not path.lower().endswith(expected_ext):
+                path = path + expected_ext
+
+            # Verify parent directory exists
+            parent = os.path.dirname(path)
+            if parent and not os.path.exists(parent):
+                return {"error": f"Directory does not exist: {parent}"}
+
+            if fmt in ("gltf", "glb"):
+                bpy.ops.export_scene.gltf(
+                    filepath=path,
+                    export_format="GLTF_SEPARATE" if fmt == "gltf" else "GLB",
+                    use_selection=selected_only,
+                )
+            elif fmt == "fbx":
+                bpy.ops.export_scene.fbx(
+                    filepath=path,
+                    use_selection=selected_only,
+                )
+            elif fmt == "obj":
+                if bpy.app.version >= (4, 0, 0):
+                    bpy.ops.wm.obj_export(
+                        filepath=path,
+                        export_selected_objects=selected_only,
+                    )
+                else:
+                    bpy.ops.export_scene.obj(
+                        filepath=path,
+                        use_selection=selected_only,
+                    )
+
+            return {"filepath": path, "format": fmt}
+        except Exception as e:
+            return {"error": f"Export failed: {str(e)}"}
 
     def get_polyhaven_categories(self, asset_type):
         """Get categories for a specific asset type from Polyhaven"""
