@@ -244,7 +244,14 @@ def get_blender_connection():
 
 @mcp.tool()
 def get_scene_info(ctx: Context) -> str:
-    """Get detailed information about the current Blender scene"""
+    """
+    Get a full snapshot of the current Blender scene as JSON.
+
+    Returns: object names, types, locations, dimensions, materials,
+    active camera, render settings, and collection hierarchy.
+
+    Call this first to understand what exists before making changes.
+    """
     try:
         blender = get_blender_connection()
         result = blender.send_command("get_scene_info")
@@ -258,10 +265,14 @@ def get_scene_info(ctx: Context) -> str:
 @mcp.tool()
 def get_object_info(ctx: Context, object_name: str) -> str:
     """
-    Get detailed information about a specific object in the Blender scene.
-    
+    Get detailed properties of a single object in the Blender scene as JSON.
+
+    Returns: location, rotation, scale, dimensions, mesh data (vertices, faces, edges),
+    materials, modifiers, constraints, and parent/child relationships.
+
     Parameters:
-    - object_name: The name of the object to get information about
+    - object_name: Exact name of the object (case-sensitive, e.g. "Cube", "Car.001").
+      Use get_scene_info first to see available object names.
     """
     try:
         blender = get_blender_connection()
@@ -276,12 +287,12 @@ def get_object_info(ctx: Context, object_name: str) -> str:
 @mcp.tool()
 def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
     """
-    Capture a screenshot of the current Blender 3D viewport.
-    
+    Capture a screenshot of the current 3D viewport at whatever angle the user is viewing.
+
+    For evaluating 3D work from multiple angles, use get_multi_angle_screenshots instead.
+
     Parameters:
-    - max_size: Maximum size in pixels for the largest dimension (default: 800)
-    
-    Returns the screenshot as an Image.
+    - max_size: Maximum dimension in pixels (default: 800). Image is scaled proportionally.
     """
     temp_path = None
     try:
@@ -386,10 +397,16 @@ def get_multi_angle_screenshots(
 @mcp.tool()
 def execute_blender_code(ctx: Context, code: str) -> str:
     """
-    Execute arbitrary Python code in Blender. Make sure to do it step-by-step by breaking it into smaller chunks.
+    Execute Python code inside Blender using the bpy API. This is the most powerful tool —
+    it can do anything Blender can do: create objects, apply modifiers, set up materials,
+    configure lighting, animate, and more.
+
+    The code runs with `bpy` already imported. Keep each call focused on one operation.
+    Use print() to return information — stdout is captured and returned.
 
     Parameters:
-    - code: The Python code to execute
+    - code: Python code to execute. Has access to `bpy` module.
+      Example: "bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 1))"
     """
     try:
         # Get the global connection
@@ -447,10 +464,11 @@ def export_model(
 @mcp.tool()
 def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
     """
-    Get a list of categories for a specific asset type on Polyhaven.
-    
+    List available categories on Poly Haven for browsing assets.
+    Requires Poly Haven to be enabled in Blender's BlenderMCP sidebar panel.
+
     Parameters:
-    - asset_type: The type of asset to get categories for (hdris, textures, models, all)
+    - asset_type: One of "hdris", "textures", "models", or "all" (default: "hdris").
     """
     try:
         blender = get_blender_connection()
@@ -483,13 +501,13 @@ def search_polyhaven_assets(
     categories: str = None
 ) -> str:
     """
-    Search for assets on Polyhaven with optional filtering.
-    
+    Search Poly Haven's library of free CC0 assets. Returns asset IDs, names,
+    download counts, and types. Use the asset_id with download_polyhaven_asset to import.
+
     Parameters:
-    - asset_type: Type of assets to search for (hdris, textures, models, all)
-    - categories: Optional comma-separated list of categories to filter by
-    
-    Returns a list of matching assets with basic information.
+    - asset_type: One of "hdris", "textures", "models", or "all" (default: "all").
+    - categories: Optional comma-separated category filter (e.g. "outdoor,urban").
+      Use get_polyhaven_categories first to see available categories.
     """
     try:
         blender = get_blender_connection()
@@ -534,13 +552,13 @@ def download_polyhaven_asset(
     file_format: str = None
 ) -> str:
     """
-    Download and import a Polyhaven asset into Blender.
-    
+    Download a Poly Haven asset and import it directly into the Blender scene.
+
     Parameters:
-    - asset_id: The ID of the asset to download
-    - asset_type: The type of asset (hdris, textures, models)
-    - resolution: The resolution to download (e.g., 1k, 2k, 4k)
-    - file_format: Optional file format (e.g., hdr, exr for HDRIs; jpg, png for textures; gltf, fbx for models)
+    - asset_id: Asset ID from search_polyhaven_assets (e.g. "kloofendal_48d_partly_cloudy").
+    - asset_type: One of "hdris", "textures", "models".
+    - resolution: Download resolution — "1k", "2k", or "4k" (default: "1k"). Higher = slower.
+    - file_format: Optional format override. HDRIs: "hdr"/"exr". Textures: "jpg"/"png". Models: "gltf"/"fbx".
     
     Returns a message indicating success or failure.
     """
@@ -583,13 +601,12 @@ def set_texture(
     texture_id: str
 ) -> str:
     """
-    Apply a previously downloaded Polyhaven texture to an object.
-    
+    Apply a previously downloaded Poly Haven texture to an object as a PBR material.
+    The texture must already be downloaded via download_polyhaven_asset.
+
     Parameters:
-    - object_name: Name of the object to apply the texture to
-    - texture_id: ID of the Polyhaven texture to apply (must be downloaded first)
-    
-    Returns a message indicating success or failure.
+    - object_name: Exact object name (case-sensitive). Use get_scene_info to find names.
+    - texture_id: Poly Haven texture ID that was already downloaded (e.g. "brick_wall_001").
     """
     try:
         # Get the global connection
@@ -638,8 +655,9 @@ def set_texture(
 @mcp.tool()
 def get_polyhaven_status(ctx: Context) -> str:
     """
-    Check if PolyHaven integration is enabled in Blender.
-    Returns a message indicating whether PolyHaven features are available.
+    Check if Poly Haven is enabled in the Blender addon sidebar.
+    Call this before using any Poly Haven tools. If disabled, tell the user
+    to enable it in Blender's BlenderMCP sidebar panel.
     """
     try:
         blender = get_blender_connection()
@@ -656,10 +674,9 @@ def get_polyhaven_status(ctx: Context) -> str:
 @mcp.tool()
 def get_hyper3d_status(ctx: Context) -> str:
     """
-    Check if Hyper3D Rodin integration is enabled in Blender.
-    Returns a message indicating whether Hyper3D Rodin features are available.
-
-    Don't emphasize the key type in the returned message, but sliently remember it. 
+    Check if Hyper3D Rodin is enabled and which API mode is active (MAIN_SITE or FAL_AI).
+    Call this before using Hyper3D tools. The mode determines which parameters to use
+    for generate and poll tools.
     """
     try:
         blender = get_blender_connection()
@@ -676,8 +693,8 @@ def get_hyper3d_status(ctx: Context) -> str:
 @mcp.tool()
 def get_sketchfab_status(ctx: Context) -> str:
     """
-    Check if Sketchfab integration is enabled in Blender.
-    Returns a message indicating whether Sketchfab features are available.
+    Check if Sketchfab is enabled in the Blender addon sidebar.
+    Call this before using Sketchfab search/download tools.
     """
     try:
         blender = get_blender_connection()
@@ -700,13 +717,15 @@ def search_sketchfab_models(
     downloadable: bool = True
 ) -> str:
     """
-    Search for models on Sketchfab with optional filtering.
+    Search Sketchfab for 3D models. Returns model names, UIDs, vertex counts,
+    and face counts. Use the UID with download_sketchfab_model to import.
+    Best for realistic, detailed models. For textures/HDRIs, use Poly Haven instead.
 
     Parameters:
-    - query: Text to search for
-    - categories: Optional comma-separated list of categories
-    - count: Maximum number of results to return (default 20)
-    - downloadable: Whether to include only downloadable models (default True)
+    - query: Search terms (e.g. "low poly car", "medieval sword").
+    - categories: Optional comma-separated categories to filter results.
+    - count: Max results to return (default: 20, keep low to avoid clutter).
+    - downloadable: Only show downloadable models (default: true).
 
     Returns a formatted list of matching models.
     """
@@ -1062,10 +1081,8 @@ def import_generated_asset(
 @mcp.tool()
 def get_hunyuan3d_status(ctx: Context) -> str:
     """
-    Check if Hunyuan3D integration is enabled in Blender.
-    Returns a message indicating whether Hunyuan3D features are available.
-
-    Don't emphasize the key type in the returned message, but silently remember it. 
+    Check if Hunyuan3D is enabled in the Blender addon sidebar.
+    Call this before using Hunyuan3D generation tools.
     """
     try:
         blender = get_blender_connection()
@@ -1259,6 +1276,11 @@ def asset_creation_strategy() -> str:
     - No suitable asset exists in any of the libraries
     - Hyper3D Rodin or Hunyuan3D failed to generate the desired asset
     - The task specifically requires a basic material/color
+
+    5. After creating or modifying assets:
+        - Use get_multi_angle_screenshots() to visually verify the result from multiple angles
+        - If something looks wrong, fix it and screenshot again
+        - When the asset is ready, use export_model() to save it to disk
     """
 
 # Main execution
